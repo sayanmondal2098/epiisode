@@ -1,125 +1,191 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:parse_server_sdk/parse_server_sdk.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final keyApplicationId = 'f41zn33xPpOcr2skuSeddr65VpBw1Hvsu8rYHzgN';
+  final keyClientKey = '7dssNVr7b9Y5yUK0eEnBHq0zvRh0dtwjWaJqPaJU';
+  final keyParseServerUrl = 'https://parseapi.back4app.com';
+
+  await Parse().initialize(keyApplicationId, keyParseServerUrl,
+      clientKey: keyClientKey, debug: true);
+
+  runApp(MaterialApp(
+    home: Home(),
+  ));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class Home extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a blue toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
+  _HomeState createState() => _HomeState();
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class _HomeState extends State<Home> {
+  final todoController = TextEditingController();
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
+  void addToDo() async {
+    if (todoController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Empty title"),
+        duration: Duration(seconds: 2),
+      ));
+      return;
+    }
+    await saveTodo(todoController.text);
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      todoController.clear();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text("Parse Todo List"),
+        backgroundColor: Colors.blueAccent,
+        centerTitle: true,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      body: Column(
+        children: <Widget>[
+          Container(
+              padding: EdgeInsets.fromLTRB(17.0, 1.0, 7.0, 1.0),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: TextField(
+                      autocorrect: true,
+                      textCapitalization: TextCapitalization.sentences,
+                      controller: todoController,
+                      decoration: InputDecoration(
+                          labelText: "New todo",
+                          labelStyle: TextStyle(color: Colors.blueAccent)),
+                    ),
+                  ),
+                  ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        onPrimary: Colors.white,
+                        primary: Colors.blueAccent,
+                      ),
+                      onPressed: addToDo,
+                      child: Text("ADD")),
+                ],
+              )),
+          Expanded(
+              child: FutureBuilder<List<ParseObject>>(
+                  future: getTodo(),
+                  builder: (context, snapshot) {
+                    switch (snapshot.connectionState) {
+                      case ConnectionState.none:
+                      case ConnectionState.waiting:
+                        return Center(
+                          child: Container(
+                              width: 100,
+                              height: 100,
+                              child: CircularProgressIndicator()),
+                        );
+                      default:
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text("Error..."),
+                          );
+                        }
+                        if (!snapshot.hasData) {
+                          return Center(
+                            child: Text("No Data..."),
+                          );
+                        } else {
+                          return ListView.builder(
+                              padding: EdgeInsets.only(top: 10.0),
+                              itemCount: snapshot.data!.length,
+                              itemBuilder: (context, index) {
+                                //*************************************
+                                //Get Parse Object Values
+                                final varTodo = snapshot.data?[index];
+                                final varTitle = varTodo!.get<String>('title')!;
+                                final varDone = varTodo.get<bool>('done')!;
+                                //*************************************
+
+                                return ListTile(
+                                  title: Text(varTitle),
+                                  leading: CircleAvatar(
+                                    child: Icon(
+                                        varDone ? Icons.check : Icons.error),
+                                    backgroundColor:
+                                        varDone ? Colors.green : Colors.blue,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                          value: varDone,
+                                          onChanged: (value) async {
+                                            await updateTodo(
+                                                varTodo.objectId!, value!);
+                                            setState(() {
+                                              //Refresh UI
+                                            });
+                                          }),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.delete,
+                                          color: Colors.blue,
+                                        ),
+                                        onPressed: () async {
+                                          await deleteTodo(varTodo.objectId!);
+                                          setState(() {
+                                            final snackBar = SnackBar(
+                                              content: Text("Todo deleted!"),
+                                              duration: Duration(seconds: 2),
+                                            );
+                                            ScaffoldMessenger.of(context)
+                                              ..removeCurrentSnackBar()
+                                              ..showSnackBar(snackBar);
+                                          });
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                );
+                              });
+                        }
+                    }
+                  }))
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  Future<void> saveTodo(String title) async {
+    final todo = ParseObject('Todo')
+      ..set('title', title)
+      ..set('done', false);
+    await todo.save();
+  }
+
+  Future<List<ParseObject>> getTodo() async {
+    QueryBuilder<ParseObject> queryTodo =
+        QueryBuilder<ParseObject>(ParseObject('Todo'));
+    final ParseResponse apiResponse = await queryTodo.query();
+
+    if (apiResponse.success && apiResponse.results != null) {
+      return apiResponse.results as List<ParseObject>;
+    } else {
+      return [];
+    }
+  }
+
+  Future<void> updateTodo(String id, bool done) async {
+    var todo = ParseObject('Todo')
+      ..objectId = id
+      ..set('done', done);
+    await todo.save();
+  }
+
+  Future<void> deleteTodo(String id) async {
+    var todo = ParseObject('Todo')..objectId = id;
+    await todo.delete();
   }
 }
